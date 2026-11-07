@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<!-- saved from url=(0032)https://zterminal11.netlify.app/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=a501c122-92a8-4347-96f4-40448b5d83ba
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zterminal — Official Z# Command Line Interface</title>
+  <style>
+    :root {
+      --bg-dark: #0a0a0c;
+      --panel-bg: #121215;
+      --accent-crimson: #dc143c;
+      --text-green: #39ff14;
+      --text-main: #f0f0f5;
+      --text-muted: #8a8a93;
+      --border-color: #26262e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
+    body { background-color: var(--bg-dark); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* Top Header */
+    header { height: 50px; background-color: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-family: -apple-system, sans-serif; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .logo-badge { background: linear-gradient(135deg, var(--accent-crimson), #8b0000); color: #fff; font-weight: bold; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%); font-size: 0.9rem; }
+    .brand-title { font-size: 1rem; font-weight: 700; color: var(--text-main); }
+    .brand-title span { color: var(--accent-crimson); }
+    nav a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; margin-left: 16px; transition: color 0.2s; }
+    nav a:hover { color: var(--text-main); }
+
+    /* Terminal Container */
+    .terminal-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background-color: var(--bg-dark); }
+    .terminal-row { display: flex; flex-direction: column; gap: 4px; line-height: 1.4; font-size: 0.95rem; }
+    .prompt-line { display: flex; align-items: center; gap: 8px; }
+    .prompt-user { color: var(--accent-crimson); font-weight: bold; }
+    .prompt-path { color: #00d2ff; }
+    .output { color: var(--text-muted); white-space: pre-wrap; margin-left: 4px; }
+    .output.success { color: var(--text-green); }
+    .output.error { color: #ff4757; }
+
+    /* Command Input Line */
+    .input-line { display: flex; align-items: center; gap: 8px; }
+    .cmd-input { flex: 1; background: transparent; border: none; outline: none; color: var(--text-main); font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; }
+
+    /* Scrollbar Styling */
+    .terminal-container::-webkit-scrollbar { width: 6px; }
+    .terminal-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-badge">Z#</div>
+      <div class="brand-title">Zterminal <span>CLI v1.0</span></div>
+    </div>
+    <nav>
+      <a href="https://zsharp11.netlify.app/" target="_blank">Z# Portal</a>
+      <a href="https://zstudio11.netlify.app/" target="_blank">Zstudio IDE</a>
+      <a href="https://zpm11.netlify.app/" target="_blank">ZPM Hub</a>
+    </nav>
+  </header>
+
+  <!-- Terminal Window -->
+  <div class="terminal-container" id="terminal" onclick="focusInput()">
+    <div class="terminal-row">
+      <div class="output success">Z# Runtime Engine [Version 1.0.4 - Tablet Architecture]</div>
+      <div class="output">Type 'help' to view available Zterminal commands.</div>
+      <div class="output">--------------------------------------------------</div>
+    </div>
+
+    <!-- Active Input Line -->
+    <div class="input-line" id="inputContainer">
+      <span class="prompt-user">ahmed@zcodex</span>:<span class="prompt-path">~/workspace</span>$
+      <input type="text" class="cmd-input" id="cmdInput" autofocus="" spellcheck="false" onkeydown="handleCommand(event)">
+    </div>
+  </div>
+
+  <script>
+    const terminal = document.getElementById('terminal');
+    const cmdInput = document.getElementById('cmdInput');
+    const inputContainer = document.getElementById('inputContainer');
+
+    const commands = {
+      'help': `Available Commands:
+  help                     - Show this menu
+  zsharp run <file.zs>     - Execute a Z# source file
+  zpm install <package>    - Install a library from ZPM Registry
+  zstudio                  - Open Zstudio IDE in browser
+  clear                    - Clear terminal screen
+  version                  - Display Z# core version
+  whoami                   - Show current developer session`,
+
+      'version': `Z# Language v1.0.4 (ZcodexZ Ecosystem)`,
+      'whoami': `Ahmed (Creator of Z# Language & ZcodexZ Architecture)`,
+      'zstudio': `Opening Zstudio IDE... Redirecting to zstudio11.netlify.app`
+    };
+
+    function focusInput() {
+      cmdInput.focus();
+    }
+
+    function handleCommand(e) {
+      if (e.key === 'Enter') {
+        const inputVal = cmdInput.value.trim();
+        if (!inputVal) return;
+
+        // Print Executed Prompt
+        const historyRow = document.createElement('div');
+        historyRow.className = 'terminal-row';
+        historyRow.innerHTML = `
+          <div class="prompt-line">
+            <span class="prompt-user">ahmed@zcodex</span>:<span class="prompt-path">~/workspace</span>$ ${escapeHtml(inputVal)}
+          </div>
+        `;
+
+        // Process Command Output
+        let outputText = '';
+        let outputClass = 'output';
+
+        const args = inputVal.split(' ');
+        const mainCmd = args[0].toLowerCase();
+
+        if (mainCmd === 'clear') {
+          // Clear terminal lines except the input line
+          const rows = terminal.querySelectorAll('.terminal-row');
+          rows.forEach(row => row.remove());
+          cmdInput.value = '';
+          return;
+        } else if (mainCmd === 'zstudio') {
+          outputText = commands['zstudio'];
+          window.open('https://zstudio11.netlify.app', '_blank');
+        } else if (mainCmd === 'zpm' && args[1] === 'install') {
+          const pkg = args[2] || 'package';
+          outputText = `[ZPM] Downloading ${pkg}...\n[ZPM] Unpacking dependencies...\n[ZPM] Installed ${pkg} successfully to /modules/`;
+          outputClass = 'output success';
+        } else if (mainCmd === 'zsharp' && args[1] === 'run') {
+          const file = args[2] || 'main.zs';
+          outputText = `[Z# Engine] Compiling ${file}...\n[Z# Engine] Touch & Stylus bindings initialized.\n[Z# Engine] Executed successfully (0.02ms).`;
+          outputClass = 'output success';
+        } else if (commands[inputVal]) {
+          outputText = commands[inputVal];
+        } else {
+          outputText = `zterminal: command not found: ${inputVal}. Type 'help' for commands.`;
+          outputClass = 'output error';
+        }
+
+        if (outputText) {
+          const outputDiv = document.createElement('div');
+          outputDiv.className = outputClass;
+          outputDiv.innerText = outputText;
+          historyRow.appendChild(outputDiv);
+        }
+
+        // Insert before active input line and scroll
+        terminal.insertBefore(historyRow, inputContainer);
+        cmdInput.value = '';
+        terminal.scrollTop = terminal.scrollHeight;
+      }
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+
+<script async="" src="./Zterminal_files/hud" data-nf-variant="public" data-netlify-site-id="a501c122-92a8-4347-96f4-40448b5d83ba" data-app-host="app.netlify.com" data-account-tier="free"></script>
+<iframe id="nl-badge-frame" title="Powered by Netlify" style="position: fixed; bottom: 0px; right: 0px; border: 0px; margin: 0px; padding: 0px; background: transparent; color-scheme: dark; z-index: 2147483645; width: 197px; height: 64px; clip-path: path(&quot;M 3 3 H 184 V 51 H 3 Z&quot;);" data-nl-ready="1" src="./Zterminal_files/saved_resource.html"></iframe></body></html>

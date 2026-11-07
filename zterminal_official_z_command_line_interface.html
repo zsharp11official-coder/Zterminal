@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zterminal — Official Z# Command Line Interface</title>
+  <style>
+    :root {
+      --bg-dark: #0a0a0c;
+      --panel-bg: #121215;
+      --accent-crimson: #dc143c;
+      --text-green: #39ff14;
+      --text-main: #f0f0f5;
+      --text-muted: #8a8a93;
+      --text-cyan: #00d2ff;
+      --text-yellow: #ffcf00;
+      --border-color: #26262e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; }
+    body { background-color: var(--bg-dark); color: var(--text-main); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* Top Header */
+    header { height: 50px; background-color: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .logo-badge { background: linear-gradient(135deg, var(--accent-crimson), #8b0000); color: #fff; font-weight: bold; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%); font-size: 0.9rem; }
+    .brand-title { font-size: 1rem; font-weight: 700; color: var(--text-main); }
+    .brand-title span { color: var(--accent-crimson); }
+    
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .auth-badge { font-size: 0.8rem; background: rgba(220, 20, 60, 0.15); border: 1px solid rgba(220, 20, 60, 0.4); padding: 3px 8px; border-radius: 4px; color: var(--text-main); cursor: pointer; }
+    .auth-badge.logged-in { background: rgba(57, 255, 20, 0.15); border-color: rgba(57, 255, 20, 0.4); color: var(--text-green); }
+
+    nav a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; margin-left: 12px; transition: color 0.2s; }
+    nav a:hover { color: var(--text-main); }
+
+    /* Terminal Container */
+    .terminal-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background-color: var(--bg-dark); }
+    .terminal-row { display: flex; flex-direction: column; gap: 4px; line-height: 1.4; font-size: 0.95rem; }
+    .prompt-line { display: flex; align-items: flex-start; gap: 8px; word-break: break-all; }
+    .prompt-user { color: var(--accent-crimson); font-weight: bold; }
+    .prompt-path { color: var(--text-cyan); }
+    .output { color: var(--text-muted); white-space: pre-wrap; margin-left: 4px; line-height: 1.5; }
+    .output.success { color: var(--text-green); }
+    .output.error { color: #ff4757; }
+    .output.ai { color: var(--text-cyan); border-left: 2px solid var(--text-cyan); padding-left: 10px; margin: 4px 0 4px 4px; }
+    .output.warning { color: var(--text-yellow); }
+
+    /* Command Input Line */
+    .input-line { display: flex; align-items: center; gap: 8px; }
+    .cmd-input { flex: 1; background: transparent; border: none; outline: none; color: var(--text-main); font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; }
+
+    /* Scrollbar Styling */
+    .terminal-container::-webkit-scrollbar { width: 6px; }
+    .terminal-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+
+    /* Modal / Form Overlay */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(3px); align-items: center; justify-content: center; z-index: 100; }
+    .modal-card { background: var(--panel-bg); border: 1px solid var(--border-color); width: 340px; border-radius: 8px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); font-family: -apple-system, sans-serif; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .modal-title { font-size: 1.1rem; font-weight: bold; color: var(--text-main); }
+    .modal-close { cursor: pointer; color: var(--text-muted); font-size: 1.2rem; }
+    .modal-close:hover { color: var(--text-main); }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+    .form-input { width: 100%; background: #0a0a0c; border: 1px solid var(--border-color); color: var(--text-main); padding: 8px; border-radius: 4px; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem; }
+    .form-input:focus { outline: none; border-color: var(--accent-crimson); }
+    .btn-submit { width: 100%; background: var(--accent-crimson); color: white; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 8px; transition: opacity 0.2s; }
+    .btn-submit:hover { opacity: 0.9; }
+    .form-note { font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; text-align: center; }
+    .form-note span { color: var(--text-cyan); cursor: pointer; text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-badge">Z#</div>
+      <div class="brand-title">Zterminal <span>CLI v1.2</span></div>
+    </div>
+    <div class="header-right">
+      <div class="auth-badge" id="headerAuthBadge" onclick="toggleAuthModal()">
+        AI Auth: Guest (Login Required)
+      </div>
+      <nav>
+        <a href="https://zsharp11.netlify.app/" target="_blank">Z# Portal</a>
+        <a href="javascript:void(0)" onclick="openZStudio()">Zstudio IDE</a>
+        <a href="https://zpm11.netlify.app/" target="_blank">ZPM Hub</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Terminal Window -->
+  <div class="terminal-container" id="terminal" onclick="focusInput()">
+    <div class="terminal-row">
+      <div class="output success">Z# Runtime Engine [Version 1.0.4 - Tablet & Cloud Sync Architecture]</div>
+      <div class="output">Type 'help' to view available Zterminal commands.</div>
+      <div class="output">AI Features Enabled. Use 'signup' or 'login' with your @zsharp.org email to unlock 'zai'.</div>
+      <div class="output">--------------------------------------------------</div>
+    </div>
+
+    <!-- Active Input Line -->
+    <div class="input-line" id="inputContainer">
+      <span class="prompt-user" id="promptUser">ahmed@zcodex</span>:<span class="prompt-path" id="promptPath">~/workspace</span>$
+      <input type="text" class="cmd-input" id="cmdInput" autofocus spellcheck="false" onkeydown="handleCommand(event)">
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">Z# Developer Sign In</div>
+        <div class="modal-close" onclick="closeAuthModal()">&times;</div>
+      </div>
+      <form id="authForm" onsubmit="handleAuthSubmit(event)">
+        <div class="form-group" id="nameGroup" style="display: none;">
+          <label>Full Name</label>
+          <input type="text" id="authName" class="form-input" placeholder="Ahmed Zcodex">
+        </div>
+        <div class="form-group">
+          <label>Z# Developer Email (@zsharp.org)</label>
+          <input type="email" id="authEmail" class="form-input" placeholder="dev@zsharp.org" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="authPassword" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-submit" id="authSubmitBtn">Sign In</button>
+        <div class="form-note" id="authToggleNote">
+          Don't have an account? <span onclick="switchAuthMode('signup')">Sign Up</span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const terminal = document.getElementById('terminal');
+    const cmdInput = document.getElementById('cmdInput');
+    const inputContainer = document.getElementById('inputContainer');
+    const promptUser = document.getElementById('promptUser');
+    const headerAuthBadge = document.getElementById('headerAuthBadge');
+
+    // Virtual File System State
+    let currentPath = '~/workspace';
+    let fileSystem = {
+      '~/workspace': {
+        'main.zs': 'func main() {\n  print("Hello from Z# Engine!");\n}',
+        'config.json': '{\n  "version": "1.0.4",\n  "target": "tablet-native"\n}',
+        'notes.txt': 'Zterminal v1.2 with Gemini AI & Zstudio IDE Sync'
+      }
+    };
+
+    // Installed Packages Storage Keys
+    const ZPM_STORAGE_KEY = 'zsharp_installed_packages';
+    const AUTH_USER_KEY = 'zsharp_active_user';
+
+    // Command History & AI Tracking
+    let commandHistory = [];
+    let historyIndex = -1;
+    let lastExecutedCommand = '';
+    let lastErrorOutput = '';
+
+    // Auth State
+    let currentUser = JSON.parse(localStorage.getItem(AUTH_USER_KEY) || 'null');
+    let authMode = 'login'; // 'login' or 'signup'
+
+    // Synchronize initial state
+    updateUserPrompt();
+
+    // Default Static Help Dictionary
+    const commandsHelp = `Available Commands:
+  help                     - Show this menu
+  ls                       - List files in current directory
+  cat <file>               - Display content of a file
+  touch <file>             - Create an empty file
+  rm <file>                - Remove a file from workspace
+  mkdir <dir>              - Create a directory
+  clear                    - Clear terminal screen
+  history                  - View command history
+  env                      - Print environment variables
+
+  -- Z# & ZPM Commands --
+  zsharp run <file.zs>     - Execute a Z# source file
+  zpm install <package>    - Install a library (Syncs to Zstudio IDE)
+  zpm list                 - List installed ZPM packages
+  zpm uninstall <pkg>      - Uninstall a package
+  zpm search <query>       - Search ZPM package registry
+  zstudio                  - Open Zstudio IDE with installed libraries synced
+
+  -- User & AI Commands --
+  signup                   - Sign up for a Z# Developer account (@zsharp.org)
+  login                    - Log in to your Z# Developer account
+  logout                   - End current developer session
+  whoami                   - Show current developer session & auth status
+  zai explain <cmd>        - Use Gemini AI to explain a terminal command
+  zai fix                  - Use Gemini AI to diagnose & fix the last error
+  zai prompt <question>    - Ask Z# AI Assistant anything coding related`;
+
+    function focusInput() {
+      cmdInput.focus();
+    }
+
+    function updateUserPrompt() {
+      if (currentUser && currentUser.email) {
+        const username = currentUser.email.split('@')[0];
+        promptUser.innerText = `${username}@zcodex`;
+        headerAuthBadge.innerText = `AI Auth: ${currentUser.email}`;
+        headerAuthBadge.classList.add('logged-in');
+      } else {
+        promptUser.innerText = `ahmed@zcodex`;
+        headerAuthBadge.innerText = `AI Auth: Guest (Login Required)`;
+        headerAuthBadge.classList.remove('logged-in');
+      }
+    }
+
+    function getInstalledPackages() {
+      try {
+        return JSON.parse(localStorage.getItem(ZPM_STORAGE_KEY)) || ['zsharp-core', 'zmath-lib'];
+      } catch (e) {
+        return ['zsharp-core', 'zmath-lib'];
+      }
+    }
+
+    function setInstalledPackages(pkgs) {
+      localStorage.setItem(ZPM_STORAGE_KEY, JSON.stringify(pkgs));
+    }
+
+    function openZStudio() {
+      const pkgs = getInstalledPackages().join(',');
+      const targetUrl = `https://zstudio11dev.netlify.app/?packages=${encodeURIComponent(pkgs)}`;
+      window.open(targetUrl, '_blank');
+    }
+
+    // Modal Control Logic
+    function toggleAuthModal() {
+      const modal = document.getElementById('authModal');
+      modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+    }
+    function closeAuthModal() {
+      document.getElementById('authModal').style.display = 'none';
+    }
+    function switchAuthMode(mode) {
+      authMode = mode;
+      document.getElementById('modalTitle').innerText = mode === 'signup' ? 'Create Z# Developer Account' : 'Z# Developer Sign In';
+      document.getElementById('nameGroup').style.display = mode === 'signup' ? 'block' : 'none';
+      document.getElementById('authSubmitBtn').innerText = mode === 'signup' ? 'Sign Up' : 'Sign In';
+      document.getElementById('authToggleNote').innerHTML = mode === 'signup' 
+        ? `Already have an account? <span onclick="switchAuthMode('login')">Sign In</span>`
+        : `Don't have an account? <span onclick="switchAuthMode('signup')">Sign Up</span>`;
+    }
+
+    function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const name = document.getElementById('authName').value.trim();
+
+      if (!email.toLowerCase().endsWith('@zsharp.org')) {
+        alert('Authentication Error: Only @zsharp.org email addresses are permitted for AI features.');
+        return;
+      }
+
+      if (password.length < 4) {
+        alert('Password must be at least 4 characters long.');
+        return;
+      }
+
+      currentUser = {
+        name: name || email.split('@')[0],
+        email: email,
+        token: 'ztoken_' + Date.now()
+      };
+
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(currentUser));
+      updateUserPrompt();
+      closeAuthModal();
+      appendOutput(`[Auth Success] Logged in as ${currentUser.email}. Z# AI features unlocked!`, 'output success');
+    }
+
+    // Main Terminal Command Handler
+    async function handleCommand(e) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (commandHistory.length > 0 && historyIndex > 0) {
+          historyIndex--;
+          cmdInput.value = commandHistory[historyIndex];
+        }
+        return;
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+          cmdInput.value = commandHistory[historyIndex];
+        } else {
+          historyIndex = commandHistory.length;
+          cmdInput.value = '';
+        }
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        const inputVal = cmdInput.value.trim();
+        if (!inputVal) return;
+
+        // Command history tracking
+        commandHistory.push(inputVal);
+        historyIndex = commandHistory.length;
+        lastExecutedCommand = inputVal;
+
+        // Print Executed Prompt
+        const historyRow = document.createElement('div');
+        historyRow.className = 'terminal-row';
+        historyRow.innerHTML = `
+          <div class="prompt-line">
+            <span class="prompt-user">${escapeHtml(promptUser.innerText)}</span>:<span class="prompt-path">${escapeHtml(currentPath)}</span>$ ${escapeHtml(inputVal)}
+          </div>
+        `;
+
+        terminal.insertBefore(historyRow, inputContainer);
+        cmdInput.value = '';
+
+        const args = inputVal.split(' ').filter(Boolean);
+        const mainCmd = args[0].toLowerCase();
+
+        // System Commands Logic
+        if (mainCmd === 'clear') {
+          const rows = terminal.querySelectorAll('.terminal-row');
+          rows.forEach(row => row.remove());
+          return;
+        } 
+        
+        else if (mainCmd === 'help') {
+          appendOutput(commandsHelp, 'output');
+        }
+
+        else if (mainCmd === 'ls') {
+          const files = Object.keys(fileSystem[currentPath] || {});
+          if (files.length === 0) {
+            appendOutput('(empty directory)', 'output');
+          } else {
+            appendOutput(files.join('   '), 'output success');
+          }
+        }
+
+        else if (mainCmd === 'cat') {
+          const fileName = args[1];
+          if (!fileName) {
+            appendOutput('Usage: cat <filename>', 'output error');
+          } else if (fileSystem[currentPath] && fileSystem[currentPath][fileName]) {
+            appendOutput(fileSystem[currentPath][fileName], 'output');
+          } else {
+            const err = `cat: ${fileName}: No such file or directory`;
+            lastErrorOutput = err;
+            appendOutput(err, 'output error');
+          }
+        }
+
+        else if (mainCmd === 'touch') {
+          const fileName = args[1];
+          if (!fileName) {
+            appendOutput('Usage: touch <filename>', 'output error');
+          } else {
+            if (!fileSystem[currentPath]) fileSystem[currentPath] = {};
+            fileSystem[currentPath][fileName] = `// Created ${new Date().toISOString()}`;
+            appendOutput(`Created file: ${fileName}`, 'output success');
+          }
+        }
+
+        else if (mainCmd === 'rm') {
+          const fileName = args[1];
+          if (!fileName) {
+            appendOutput('Usage: rm <filename>', 'output error');
+          } else if (fileSystem[currentPath] && fileSystem[currentPath][fileName]) {
+            delete fileSystem[currentPath][fileName];
+            appendOutput(`Removed file: ${fileName}`, 'output success');
+          } else {
+            appendOutput(`rm: cannot remove '${fileName}': No such file`, 'output error');
+          }
+        }
+
+        else if (mainCmd === 'mkdir') {
+          const dirName = args[1];
+          if (!dirName) {
+            appendOutput('Usage: mkdir <directory>', 'output error');
+          } else {
+            fileSystem[`${currentPath}/${dirName}`] = {};
+            appendOutput(`Directory created: ${dirName}`, 'output success');
+          }
+        }
+
+        else if (mainCmd === 'history') {
+          appendOutput(commandHistory.map((cmd, idx) => ` ${idx + 1}  ${cmd}`).join('\n'), 'output');
+        }
+
+        else if (mainCmd === 'env') {
+          appendOutput(`ZSHARP_VERSION=1.0.4\nZSHARP_TARGET=tablet-cloud\nZSTUDIO_URL=https://zstudio11dev.netlify.app\nZPM_REGISTRY=https://zpm11.netlify.app/api\nSESSION_USER=${currentUser ? currentUser.email : 'guest'}`, 'output');
+        }
+
+        else if (mainCmd === 'zstudio') {
+          const pkgs = getInstalledPackages();
+          appendOutput(`[Zstudio Sync] Exporting installed packages: [${pkgs.join(', ')}]\nRedirecting to https://zstudio11dev.netlify.app...`, 'output success');
+          openZStudio();
+        }
+
+        else if (mainCmd === 'zpm') {
+          const subCmd = args[1] ? args[1].toLowerCase() : '';
+          let pkgs = getInstalledPackages();
+
+          if (subCmd === 'install') {
+            const pkgName = args[2];
+            if (!pkgName) {
+              const err = '[ZPM Error] Missing package name. Usage: zpm install <package_name>';
+              lastErrorOutput = err;
+              appendOutput(err, 'output error');
+            } else {
+              if (!pkgs.includes(pkgName)) {
+                pkgs.push(pkgName);
+                setInstalledPackages(pkgs);
+              }
+              appendOutput(`[ZPM Registry] Resolving dependency graph for '${pkgName}'...\n[ZPM Registry] Downloading tarball package...\n[ZPM Registry] Verified integrity checksum.\n[ZPM Sync] Added '${pkgName}' to Zstudio IDE (zstudio11dev.netlify.app)\nInstalled '${pkgName}' successfully.`, 'output success');
+            }
+          } else if (subCmd === 'list') {
+            appendOutput(`Installed ZPM Packages:\n` + pkgs.map(p => `  - ${p}`).join('\n'), 'output success');
+          } else if (subCmd === 'uninstall') {
+            const pkgName = args[2];
+            if (!pkgName) {
+              appendOutput('Usage: zpm uninstall <package_name>', 'output error');
+            } else {
+              pkgs = pkgs.filter(p => p !== pkgName);
+              setInstalledPackages(pkgs);
+              appendOutput(`[ZPM] Uninstalled '${pkgName}'. Synced removal to Zstudio IDE.`, 'output warning');
+            }
+          } else if (subCmd === 'search') {
+            const query = args[2] || '';
+            appendOutput(`[ZPM Search Results for '${query}']:\n  - zsharp-ui-kit (v2.1.0)\n  - zmath-advanced (v1.0.2)\n  - z-cloud-db (v0.9.4)`, 'output');
+          } else {
+            appendOutput(`Usage: zpm [install|list|uninstall|search]`, 'output error');
+          }
+        }
+
+        else if (mainCmd === 'zsharp' && args[1] === 'run') {
+          const file = args[2] || 'main.zs';
+          if (fileSystem[currentPath] && fileSystem[currentPath][file]) {
+            appendOutput(`[Z# Core Compiler] Parsing AST for ${file}...\n[Z# Engine] Stylus & Touch bindings initialized.\n[Output]: Hello from Z# Engine!\n[Z# Engine] Process finished with exit code 0 (0.018ms).`, 'output success');
+          } else {
+            const err = `[Z# Compiler Error] Cannot compile file '${file}': File not found in workspace.`;
+            lastErrorOutput = err;
+            appendOutput(err, 'output error');
+          }
+        }
+
+        else if (mainCmd === 'version') {
+          appendOutput(`Z# Runtime Engine v1.0.4 (Tablet Architecture)\nZterminal CLI v1.2 (Gemini AI Integrated)\nZPM Package Manager v1.0.2`, 'output');
+        }
+
+        else if (mainCmd === 'whoami') {
+          if (currentUser) {
+            appendOutput(`Active User: ${currentUser.name}\nEmail: ${currentUser.email}\nStatus: Verified Z# Developer (@zsharp.org)\nAI Access: Unlocked`, 'output success');
+          } else {
+            appendOutput(`Active User: Ahmed (Guest Session)\nAuth Status: Unauthenticated\nAI Access: Restricted (Use 'signup' or 'login' with @zsharp.org email)`, 'output warning');
+          }
+        }
+
+        else if (mainCmd === 'signup') {
+          switchAuthMode('signup');
+          toggleAuthModal();
+        }
+
+        else if (mainCmd === 'login') {
+          switchAuthMode('login');
+          toggleAuthModal();
+        }
+
+        else if (mainCmd === 'logout') {
+          currentUser = null;
+          localStorage.removeItem(AUTH_USER_KEY);
+          updateUserPrompt();
+          appendOutput('[Auth] Logged out successfully.', 'output warning');
+        }
+
+        // AI Command Suite: zai
+        else if (mainCmd === 'zai') {
+          if (!currentUser || !currentUser.email || !currentUser.email.toLowerCase().endsWith('@zsharp.org')) {
+            const err = `[Z# AI Auth Error] Access Denied!\nYou must sign up or log in with an @zsharp.org email address to use Gemini AI features.\nRun 'signup' or 'login' to continue.`;
+            appendOutput(err, 'output error');
+            lastErrorOutput = err;
+          } else {
+            const aiSubCmd = args[1] ? args[1].toLowerCase() : '';
+
+            if (aiSubCmd === 'explain') {
+              const cmdToExplain = args.slice(2).join(' ');
+              if (!cmdToExplain) {
+                appendOutput('Usage: zai explain <command_or_concept>', 'output error');
+              } else {
+                appendOutput(`[Gemini AI] Analyzing command '${cmdToExplain}'...`, 'output warning');
+                await fetchGeminiAIExplanation(cmdToExplain);
+              }
+            } else if (aiSubCmd === 'fix') {
+              const targetError = lastErrorOutput || 'Command failed with exit code 1';
+              appendOutput(`[Gemini AI] Diagnosing recent error: "${targetError}"...`, 'output warning');
+              await fetchGeminiAIFix(lastExecutedCommand, targetError);
+            } else if (aiSubCmd === 'prompt' || aiSubCmd === 'ask') {
+              const promptQuery = args.slice(2).join(' ');
+              if (!promptQuery) {
+                appendOutput('Usage: zai prompt <your programming question>', 'output error');
+              } else {
+                appendOutput(`[Gemini AI] Processing prompt: "${promptQuery}"...`, 'output warning');
+                await fetchGeminiAIGeneral(promptQuery);
+              }
+            } else {
+              appendOutput(`Usage for AI assistant:\n  zai explain <command>  - Explain CLI command or syntax\n  zai fix               - Diagnose & propose fix for recent error\n  zai prompt <question> - General AI coding assistant`, 'output');
+            }
+          }
+        }
+
+        else {
+          const err = `zterminal: command not found: ${inputVal}. Type 'help' for commands or 'zai fix' to analyze.`;
+          lastErrorOutput = err;
+          appendOutput(err, 'output error');
+        }
+
+        terminal.scrollTop = terminal.scrollHeight;
+      }
+    }
+
+    function appendOutput(text, className) {
+      const outputDiv = document.createElement('div');
+      outputDiv.className = className;
+      outputDiv.innerText = text;
+      
+      const historyRow = document.createElement('div');
+      historyRow.className = 'terminal-row';
+      historyRow.appendChild(outputDiv);
+      
+      terminal.insertBefore(historyRow, inputContainer);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // Gemini API Integrations with Exponential Backoff
+    async function fetchGeminiAPI(systemInstruction, userQuery) {
+      const apiKey = ""; // Canvas runtime provides the active key
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+      const payload = {
+        contents: [{ parts: [{ text: userQuery }] }],
+        systemInstruction: { parts: [{ text: systemInstruction }] }
+      };
+
+      let delay = 1000;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) return text;
+        } catch (err) {
+          if (attempt === 2) throw err;
+          await new Promise(res => setTimeout(res, delay));
+          delay *= 2;
+        }
+      }
+      throw new Error('Gemini API call failed.');
+    }
+
+    async function fetchGeminiAIExplanation(cmdToExplain) {
+      const systemInstruction = "You are Z# AI Assistant integrated into Zterminal CLI. Provide concise, clear terminal-style markdown explanations for commands. Keep it under 4 paragraphs.";
+      const prompt = `Explain how to use this terminal command/concept and what it does in detail: "${cmdToExplain}". Mention any relevant syntax and flags.`;
+      
+      try {
+        const reply = await fetchGeminiAPI(systemInstruction, prompt);
+        appendOutput(`🤖 [Z# AI Explanation]:\n\n${reply}`, 'output ai');
+      } catch (err) {
+        appendOutput(`[AI Connection Error] Unable to connect to Gemini AI engine: ${err.message}`, 'output error');
+      }
+    }
+
+    async function fetchGeminiAIFix(failedCmd, errorMsg) {
+      const systemInstruction = "You are an automated CLI debugger built for Zterminal and Z# programming ecosystem. Analyze the command and error message, then provide the corrected command and a short explanation.";
+      const prompt = `The user tried running: "${failedCmd}"\nAnd received this error: "${errorMsg}"\n\nPlease diagnose the issue and provide the exact corrected command line to execute.`;
+
+      try {
+        const reply = await fetchGeminiAPI(systemInstruction, prompt);
+        appendOutput(`🛠️ [Z# AI Fix Suggestion]:\n\n${reply}`, 'output ai');
+      } catch (err) {
+        appendOutput(`[AI Connection Error] Unable to diagnose error: ${err.message}`, 'output error');
+      }
+    }
+
+    async function fetchGeminiAIGeneral(userPrompt) {
+      const systemInstruction = "You are the official Z# Programming Assistant inside Zterminal. Help the user with code generation, package recommendations, and shell tips. Keep responses formatted cleanly for a developer command line interface.";
+      
+      try {
+        const reply = await fetchGeminiAPI(systemInstruction, userPrompt);
+        appendOutput(`🤖 [Z# AI Assistant]:\n\n${reply}`, 'output ai');
+      } catch (err) {
+        appendOutput(`[AI Connection Error] Request failed: ${err.message}`, 'output error');
+      }
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>
